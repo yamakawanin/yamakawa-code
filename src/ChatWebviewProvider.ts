@@ -98,7 +98,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             `Current effective baseUrl: ${s.baseUrl}`
           );
         }
-        vscode.commands.executeCommand('workbench.action.openSettings', '@ext:yamakawanin.yamakawa-code yamakawaCode.baseUrl');
+        vscode.commands.executeCommand('workbench.action.openSettings', 'yamakawaCode');
         return;
       case 'pickAttachment':
         await this.pickAttachments();
