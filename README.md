@@ -14,7 +14,7 @@ A Claude Code–style chat sidebar for VS Code, powered by any OpenAI-compatible
 ## Defaults
 
 - Endpoint: `https://apic1.ohmycdn.com/v1/chat/completions`
-- Model: `gpt-4.1`
+- Model: `gpt-5.2`
 
 ## Configuration
 

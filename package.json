@@ -162,6 +162,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "set-icon": "node scripts/set-icon.mjs",
+    "bootstrap": "python3 scripts/bootstrap_project.py",
     "release:check": "npm run compile && npx @vscode/vsce package",
     "release:patch": "npm run compile && npx @vscode/vsce publish patch",
     "release:minor": "npm run compile && npx @vscode/vsce publish minor",
