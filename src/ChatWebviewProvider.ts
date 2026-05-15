@@ -95,10 +95,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         {
           const s = this.readStatusConfig();
           void vscode.window.showInformationMessage(
-            `Current runtime: provider=${s.provider}, model=${s.model}, baseUrl=${s.baseUrl}`
+            `Current effective baseUrl: ${s.baseUrl}`
           );
         }
-        vscode.commands.executeCommand('workbench.action.openSettings', 'yamakawaCode');
+        vscode.commands.executeCommand('workbench.action.openSettings', '@ext:yamakawanin.yamakawa-code yamakawaCode.baseUrl');
         return;
       case 'pickAttachment':
         await this.pickAttachments();

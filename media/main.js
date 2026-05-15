@@ -27,9 +27,16 @@
   function applyRuntimeStatus(status) {
     if (!status || typeof status !== 'object') return;
     const model = String(status.model || '').trim();
+    const baseUrl = String(status.baseUrl || '').trim();
     if (statusModelEl && model) {
       statusModelEl.textContent = model;
       statusModelEl.title = `Current model: ${model}`;
+    }
+    if (settingsBtn) {
+      settingsBtn.title = baseUrl
+        ? `Open settings (effective baseUrl: ${baseUrl})`
+        : 'Open settings';
+      settingsBtn.setAttribute('aria-label', settingsBtn.title);
     }
     if (model) {
       inputEl.placeholder = `Message ${model}`;
