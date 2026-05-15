@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Picks the first existing icon file in media/ (svg > png > jpg > jpeg)
+// Picks the first existing icon file in media/ (jpg > jpeg > png > svg)
 // and updates package.json so the activity bar / view icon points to it.
 //
 // Usage:  npm run set-icon
@@ -22,7 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const pkgPath = resolve(root, 'package.json');
 
-const candidates = ['icon.svg', 'icon.png', 'icon.jpg', 'icon.jpeg'];
+const candidates = ['icon.jpg', 'icon.jpeg', 'icon.png', 'icon.svg'];
 const chosen = candidates.find((name) => existsSync(resolve(root, 'media', name)));
 
 if (!chosen) {

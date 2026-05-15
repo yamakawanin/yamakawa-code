@@ -378,10 +378,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 </html>`;
   }
 
-  /** Picks the first existing icon file in media/, preferring raster for the chat hero. */
+  /** Picks the first existing icon file in media/, preferring jpg for brand consistency. */
   private resolveLogoUri(webview: vscode.Webview): string | undefined {
     const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
-    const candidates = ['icon.png', 'icon.jpg', 'icon.jpeg', 'icon.svg'];
+    const candidates = ['icon.jpg', 'icon.jpeg', 'icon.png', 'icon.svg'];
     for (const name of candidates) {
       const fsPath = vscode.Uri.joinPath(mediaRoot, name).fsPath;
       if (fs.existsSync(fsPath)) {
