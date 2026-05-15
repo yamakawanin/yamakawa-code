@@ -4,9 +4,21 @@ import { URL } from 'url';
 
 export type Provider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
+export interface Attachment {
+  kind: 'image' | 'text';
+  /** Display name (basename) */
+  name: string;
+  /** For images: base64-encoded raw bytes (no data: prefix). For text: utf8 content. */
+  data: string;
+  /** Image MIME (image/png, image/jpeg, ...) */
+  mime?: string;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /** Optional attachments — only meaningful on `user` turns. */
+  attachments?: Attachment[];
 }
 
 export interface StreamHandlers {
@@ -22,40 +34,48 @@ export interface ChatCompletionOptions {
   model: string;
   temperature: number;
   messages: ChatMessage[];
-  /** Optional max tokens — required by Anthropic, optional elsewhere. */
   maxTokens?: number;
 }
 
-/**
- * Stream a chat completion from the configured provider.
- * Returns a function that can be called to abort the request.
- */
 export function streamChatCompletion(
   opts: ChatCompletionOptions,
   handlers: StreamHandlers
 ): () => void {
   switch (opts.provider) {
-    case 'anthropic':
-      return streamAnthropic(opts, handlers);
-    case 'gemini':
-      return streamGemini(opts, handlers);
-    case 'ollama':
-      return streamOllama(opts, handlers);
+    case 'anthropic': return streamAnthropic(opts, handlers);
+    case 'gemini':    return streamGemini(opts, handlers);
+    case 'ollama':    return streamOllama(opts, handlers);
     case 'openai':
-    default:
-      return streamOpenAI(opts, handlers);
+    default:          return streamOpenAI(opts, handlers);
   }
 }
 
 // ---------------------------------------------------------------------------
-// OpenAI (and any OpenAI-compatible: OhMyGPT, DeepSeek, Moonshot, Groq,
-// OpenRouter, xAI, Together, Azure OpenAI w/ proper baseUrl, etc.)
+// OpenAI-compatible
 // ---------------------------------------------------------------------------
 function streamOpenAI(opts: ChatCompletionOptions, handlers: StreamHandlers): () => void {
   const endpoint = ensurePath(opts.baseUrl, '/chat/completions');
+  const messages = opts.messages.map((m) => {
+    if (m.role !== 'user' || !m.attachments || m.attachments.length === 0) {
+      return { role: m.role, content: m.content };
+    }
+    const parts: any[] = [];
+    if (m.content) parts.push({ type: 'text', text: m.content });
+    for (const a of m.attachments) {
+      if (a.kind === 'image') {
+        parts.push({
+          type: 'image_url',
+          image_url: { url: `data:${a.mime || 'image/png'};base64,${a.data}` }
+        });
+      } else {
+        parts.push({ type: 'text', text: `\n[Attached file: ${a.name}]\n\`\`\`\n${a.data}\n\`\`\`` });
+      }
+    }
+    return { role: m.role, content: parts };
+  });
   const body = JSON.stringify({
     model: opts.model,
-    messages: opts.messages,
+    messages,
     temperature: opts.temperature,
     stream: true
   });
@@ -82,14 +102,31 @@ function streamOpenAI(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic Messages API — separate system field, x-api-key auth, SSE.
+// Anthropic
 // ---------------------------------------------------------------------------
 function streamAnthropic(opts: ChatCompletionOptions, handlers: StreamHandlers): () => void {
   const endpoint = ensurePath(opts.baseUrl, '/v1/messages');
   const system = opts.messages.find((m) => m.role === 'system')?.content || undefined;
   const messages = opts.messages
     .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => {
+      if (m.role !== 'user' || !m.attachments || m.attachments.length === 0) {
+        return { role: m.role, content: m.content };
+      }
+      const parts: any[] = [];
+      if (m.content) parts.push({ type: 'text', text: m.content });
+      for (const a of m.attachments) {
+        if (a.kind === 'image') {
+          parts.push({
+            type: 'image',
+            source: { type: 'base64', media_type: a.mime || 'image/png', data: a.data }
+          });
+        } else {
+          parts.push({ type: 'text', text: `\n[Attached file: ${a.name}]\n\`\`\`\n${a.data}\n\`\`\`` });
+        }
+      }
+      return { role: m.role, content: parts };
+    });
   const body = JSON.stringify({
     model: opts.model,
     messages,
@@ -120,8 +157,7 @@ function streamAnthropic(opts: ChatCompletionOptions, handlers: StreamHandlers):
 }
 
 // ---------------------------------------------------------------------------
-// Google Gemini — streamGenerateContent w/ SSE.
-// baseUrl default: https://generativelanguage.googleapis.com
+// Gemini
 // ---------------------------------------------------------------------------
 function streamGemini(opts: ChatCompletionOptions, handlers: StreamHandlers): () => void {
   const base = opts.baseUrl.replace(/\/+$/, '');
@@ -132,10 +168,20 @@ function streamGemini(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
   const systemMsg = opts.messages.find((m) => m.role === 'system');
   const contents = opts.messages
     .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    .map((m) => {
+      const parts: any[] = [];
+      if (m.content) parts.push({ text: m.content });
+      if (m.role === 'user' && m.attachments) {
+        for (const a of m.attachments) {
+          if (a.kind === 'image') {
+            parts.push({ inlineData: { mimeType: a.mime || 'image/png', data: a.data } });
+          } else {
+            parts.push({ text: `\n[Attached file: ${a.name}]\n\`\`\`\n${a.data}\n\`\`\`` });
+          }
+        }
+      }
+      return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+    });
 
   const body = JSON.stringify({
     contents,
@@ -163,14 +209,25 @@ function streamGemini(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
 }
 
 // ---------------------------------------------------------------------------
-// Ollama (local) — /api/chat returns newline-delimited JSON (not SSE).
-// baseUrl default: http://localhost:11434
+// Ollama
 // ---------------------------------------------------------------------------
 function streamOllama(opts: ChatCompletionOptions, handlers: StreamHandlers): () => void {
   const endpoint = ensurePath(opts.baseUrl, '/api/chat');
+  const messages = opts.messages.map((m) => {
+    const base: any = { role: m.role, content: m.content };
+    if (m.role === 'user' && m.attachments) {
+      const images = m.attachments.filter((a) => a.kind === 'image').map((a) => a.data);
+      if (images.length) base.images = images;
+      const texts = m.attachments.filter((a) => a.kind === 'text');
+      if (texts.length) {
+        base.content += '\n\n' + texts.map((a) => `[Attached file: ${a.name}]\n\`\`\`\n${a.data}\n\`\`\``).join('\n\n');
+      }
+    }
+    return base;
+  });
   const body = JSON.stringify({
     model: opts.model,
-    messages: opts.messages,
+    messages,
     options: { temperature: opts.temperature },
     stream: true
   });
@@ -179,7 +236,6 @@ function streamOllama(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
     { 'Content-Type': 'application/json' },
     body,
     (raw) => {
-      // NDJSON: one JSON object per line
       for (const line of raw.split(/\r?\n/)) {
         const t = line.trim();
         if (!t) continue;
@@ -191,12 +247,12 @@ function streamOllama(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
       }
     },
     handlers,
-    /* chunkSeparator */ '\n'
+    '\n'
   );
 }
 
 // ---------------------------------------------------------------------------
-// Shared HTTP plumbing
+// Shared
 // ---------------------------------------------------------------------------
 function doRequest(
   endpoint: string,
@@ -207,15 +263,11 @@ function doRequest(
   chunkSeparator: string = '\n\n'
 ): () => void {
   let url: URL;
-  try {
-    url = new URL(endpoint);
-  } catch (err) {
-    handlers.onError(new Error(`Invalid base URL: ${endpoint}`));
-    return () => {};
-  }
+  try { url = new URL(endpoint); }
+  catch { handlers.onError(new Error(`Invalid base URL: ${endpoint}`)); return () => {}; }
+
   const isHttps = url.protocol === 'https:';
   const lib = isHttps ? https : http;
-
   const req = lib.request(
     {
       method: 'POST',
@@ -253,14 +305,10 @@ function doRequest(
       res.on('error', (err) => handlers.onError(err));
     }
   );
-
   req.on('error', (err) => handlers.onError(err));
   req.write(body);
   req.end();
-
-  return () => {
-    try { req.destroy(); } catch { /* ignore */ }
-  };
+  return () => { try { req.destroy(); } catch { /* ignore */ } };
 }
 
 function parseSseLines(raw: string, onData: (data: string) => void) {

@@ -1,10 +1,20 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { ChatMessage, Provider, streamChatCompletion } from './api';
+import * as path from 'path';
+import { Attachment, ChatMessage, Provider, streamChatCompletion } from './api';
+import {
+  extractToolCalls,
+  formatAssistantToolBlocks,
+  MAX_TOOL_ITERATIONS,
+  runTool,
+  TOOLS_SYSTEM_PROMPT,
+  ToolResult
+} from './tools';
 
 interface StoredMessage {
   role: 'user' | 'assistant';
   content: string;
+  attachments?: Attachment[];
 }
 
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
@@ -71,7 +81,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         this.view?.webview.postMessage({ type: 'hydrate', history: this.history });
         return;
       case 'send':
-        await this.handleSend(String(msg.text ?? ''));
+        await this.handleSend(String(msg.text ?? ''), Array.isArray(msg.attachments) ? msg.attachments : []);
         return;
       case 'abort':
         this.abortCurrent?.();
@@ -83,12 +93,68 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       case 'openSettings':
         vscode.commands.executeCommand('workbench.action.openSettings', 'yamakawaCode');
         return;
+      case 'pickAttachment':
+        await this.pickAttachments();
+        return;
     }
   }
 
-  private async handleSend(text: string): Promise<void> {
+  private async pickAttachments(): Promise<void> {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: true,
+      openLabel: 'Attach to Yamakawa Code',
+      filters: {
+        'All supported': ['png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'json', 'ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'hpp', 'css', 'html', 'yaml', 'yml', 'toml'],
+        'Images': ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+        'All files': ['*']
+      }
+    });
+    if (!picked || picked.length === 0) return;
+    const attachments: Attachment[] = [];
+    for (const uri of picked) {
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        if (stat.size > 8 * 1024 * 1024) {
+          vscode.window.showWarningMessage(`Skipping ${path.basename(uri.fsPath)}: larger than 8MB.`);
+          continue;
+        }
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const name = path.basename(uri.fsPath);
+        const ext = path.extname(name).slice(1).toLowerCase();
+        const imageExts: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+        if (imageExts[ext]) {
+          attachments.push({ kind: 'image', name, mime: imageExts[ext], data: Buffer.from(bytes).toString('base64') });
+        } else {
+          if (bytes.byteLength > 200 * 1024) {
+            vscode.window.showWarningMessage(`Skipping ${name}: text file too large (${bytes.byteLength} bytes).`);
+            continue;
+          }
+          attachments.push({ kind: 'text', name, data: Buffer.from(bytes).toString('utf8') });
+        }
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`Failed to read ${uri.fsPath}: ${err?.message || err}`);
+      }
+    }
+    if (attachments.length) {
+      this.view?.webview.postMessage({
+        type: 'attachmentsPicked',
+        attachments: attachments.map((a) => ({
+          kind: a.kind,
+          name: a.name,
+          mime: a.mime,
+          // For preview only; full payload kept in webview state
+          data: a.data,
+          size: a.kind === 'image' ? Math.floor(a.data.length * 3 / 4) : a.data.length
+        }))
+      });
+    }
+  }
+
+  private async handleSend(text: string, attachments: Attachment[] = []): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && attachments.length === 0) return;
     if (!this.view) return;
 
     const cfg = vscode.workspace.getConfiguration('yamakawaCode');
@@ -96,57 +162,122 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const baseUrl = (cfg.get<string>('baseUrl', '') || '').trim() || defaultBaseUrl(provider);
     const model = cfg.get<string>('model', 'gpt-4.1');
     const temperature = cfg.get<number>('temperature', 0.7);
-    const systemPrompt = cfg.get<string>('systemPrompt', '');
+    const userSystemPrompt = cfg.get<string>('systemPrompt', '');
+    const workspaceTools = cfg.get<boolean>('workspaceTools', true);
     const configKey = cfg.get<string>('apiKey', '').trim();
 
     const apiKey = configKey || resolveEnvKey(provider);
 
     if (!apiKey && provider !== 'ollama') {
-      this.view.webview.postMessage({
-        type: 'error',
-        message: missingKeyMessage(provider)
-      });
+      this.view.webview.postMessage({ type: 'error', message: missingKeyMessage(provider) });
       return;
     }
 
-    // Append user message to history
-    this.history.push({ role: 'user', content: trimmed });
+    const systemPrompt = workspaceTools
+      ? `${userSystemPrompt}\n\n${TOOLS_SYSTEM_PROMPT}`.trim()
+      : userSystemPrompt;
+
+    // Append user turn to history
+    this.history.push({ role: 'user', content: trimmed, attachments: attachments.length ? attachments : undefined });
     this.persist();
-    this.view.webview.postMessage({ type: 'userMessage', content: trimmed });
-    this.view.webview.postMessage({ type: 'assistantStart' });
+    this.view.webview.postMessage({
+      type: 'userMessage',
+      content: trimmed,
+      attachments: attachments.map((a) => ({ kind: a.kind, name: a.name, mime: a.mime }))
+    });
 
-    // Build full message list
-    const messages: ChatMessage[] = [];
-    if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
-    for (const m of this.history) messages.push({ role: m.role, content: m.content });
+    // Tool-use loop: assistant -> [maybe tools] -> assistant -> ...
+    for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+      this.view.webview.postMessage({ type: 'assistantStart' });
 
-    let assembled = '';
-
-    this.abortCurrent = streamChatCompletion(
-      { provider, baseUrl, apiKey, model, temperature, messages },
-      {
-        onDelta: (delta) => {
-          assembled += delta;
-          this.view?.webview.postMessage({ type: 'assistantDelta', delta });
-        },
-        onDone: () => {
-          if (assembled) {
-            this.history.push({ role: 'assistant', content: assembled });
-            this.persist();
-          }
-          this.view?.webview.postMessage({ type: 'assistantDone' });
-          this.abortCurrent = undefined;
-        },
-        onError: (err) => {
-          this.view?.webview.postMessage({
-            type: 'error',
-            message: err.message || String(err)
-          });
-          this.view?.webview.postMessage({ type: 'assistantDone' });
-          this.abortCurrent = undefined;
-        }
+      const messages: ChatMessage[] = [];
+      if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+      for (const m of this.history) {
+        messages.push({
+          role: m.role,
+          content: m.content,
+          attachments: m.attachments
+        });
       }
-    );
+
+      const assembled = await this.runStream({ provider, baseUrl, apiKey, model, temperature, messages });
+      if (assembled === null) return; // aborted or errored
+
+      // Parse tool calls
+      const toolCalls = workspaceTools ? extractToolCalls(assembled) : [];
+      if (toolCalls.length === 0) {
+        this.history.push({ role: 'assistant', content: assembled });
+        this.persist();
+        this.view.webview.postMessage({ type: 'assistantDone' });
+        return;
+      }
+
+      // Execute each tool, collect results
+      const results: ToolResult[] = [];
+      for (const call of toolCalls) {
+        const r = await runTool(call);
+        results.push(r);
+      }
+
+      // Store assistant turn with tool blocks rewritten to compact summaries (for history compactness)
+      const compactAssistant = formatAssistantToolBlocks(assembled, results);
+      this.history.push({ role: 'assistant', content: assembled });
+      this.persist();
+      this.view.webview.postMessage({ type: 'assistantDone' });
+
+      // Build tool-result user message
+      const resultBlocks = toolCalls.map((c, i) => {
+        const r = results[i];
+        return `[tool-result] ${c.name}\n${r.ok ? '' : '(error) '}${r.output}`;
+      }).join('\n\n---\n\n');
+
+      this.history.push({ role: 'user', content: resultBlocks });
+      this.persist();
+      this.view.webview.postMessage({
+        type: 'toolResult',
+        summary: toolCalls.map((c, i) => ({ name: c.name, ok: results[i].ok, snippet: results[i].output.slice(0, 200) }))
+      });
+
+      void compactAssistant;
+    }
+
+    this.view.webview.postMessage({
+      type: 'error',
+      message: `Stopped after ${MAX_TOOL_ITERATIONS} tool iterations.`
+    });
+  }
+
+  /** Run one streaming turn. Returns the full assembled text, or null on abort/error. */
+  private async runStream(opts: {
+    provider: Provider;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    temperature: number;
+    messages: ChatMessage[];
+  }): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
+      let assembled = '';
+      this.abortCurrent = streamChatCompletion(
+        { provider: opts.provider, baseUrl: opts.baseUrl, apiKey: opts.apiKey, model: opts.model, temperature: opts.temperature, messages: opts.messages },
+        {
+          onDelta: (delta) => {
+            assembled += delta;
+            this.view?.webview.postMessage({ type: 'assistantDelta', delta });
+          },
+          onDone: () => {
+            this.abortCurrent = undefined;
+            resolve(assembled);
+          },
+          onError: (err) => {
+            this.view?.webview.postMessage({ type: 'error', message: err.message || String(err) });
+            this.view?.webview.postMessage({ type: 'assistantDone' });
+            this.abortCurrent = undefined;
+            resolve(null);
+          }
+        }
+      );
+    });
   }
 
   private persist(): void {
@@ -209,6 +340,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     <form id="composer" class="composer" autocomplete="off">
       <div class="composer-card">
+        <div id="attachments" class="attachments" hidden></div>
         <textarea
           id="input"
           rows="1"
@@ -217,6 +349,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         ></textarea>
         <div class="composer-toolbar">
           <div class="composer-toolbar-left">
+            <button type="button" id="attachBtn" class="icon-btn" title="Attach files or images" aria-label="Attach files">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
             <span class="model-pill" id="statusModel" title="Current model">${escapeAttr(status.model)}</span>
           </div>
           <div class="composer-toolbar-right">

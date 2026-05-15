@@ -104,6 +104,11 @@
           "maximum": 2,
           "description": "Sampling temperature."
         },
+        "yamakawaCode.workspaceTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow the assistant to read, write, patch and delete files in the workspace via tool calls. Write/delete/patch always ask for confirmation."
+        },
         "yamakawaCode.theme.accent": {
           "type": "string",
           "default": "#c96442",

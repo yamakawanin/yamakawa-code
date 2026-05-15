@@ -8,6 +8,8 @@
   const sendBtn = /** @type {HTMLButtonElement} */ (document.getElementById('sendBtn'));
   const stopBtn = /** @type {HTMLButtonElement} */ (document.getElementById('stopBtn'));
   const settingsBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('settingsBtn'));
+  const attachBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('attachBtn'));
+  const attachmentsEl = /** @type {HTMLElement | null} */ (document.getElementById('attachments'));
   const statusbarEl = /** @type {HTMLElement} */ (document.getElementById('statusbar'));
   const statusModelEl = /** @type {HTMLElement} */ (document.getElementById('statusModel'));
   const statusInfoEl = /** @type {HTMLElement} */ (document.getElementById('statusInfo'));
@@ -18,6 +20,63 @@
   let pendingChunks = '';
   let typingTimer = 0;
   let isStreaming = false;
+
+  /** @type {Array<{kind:'image'|'text', name:string, mime?:string, data:string}>} */
+  let pendingAttachments = [];
+
+  function renderAttachmentChips() {
+    if (!attachmentsEl) return;
+    if (pendingAttachments.length === 0) {
+      attachmentsEl.innerHTML = '';
+      attachmentsEl.hidden = true;
+      return;
+    }
+    attachmentsEl.hidden = false;
+    attachmentsEl.innerHTML = '';
+    pendingAttachments.forEach((a, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'attach-chip';
+      if (a.kind === 'image') {
+        const img = document.createElement('img');
+        img.className = 'attach-chip-thumb';
+        img.src = `data:${a.mime || 'image/png'};base64,${a.data}`;
+        img.alt = a.name;
+        chip.appendChild(img);
+      } else {
+        const icon = document.createElement('span');
+        icon.className = 'attach-chip-icon';
+        icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+        chip.appendChild(icon);
+      }
+      const name = document.createElement('span');
+      name.className = 'attach-chip-name';
+      name.textContent = a.name;
+      chip.appendChild(name);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'attach-chip-close';
+      close.title = 'Remove';
+      close.textContent = '\u00d7';
+      close.addEventListener('click', () => {
+        pendingAttachments.splice(idx, 1);
+        renderAttachmentChips();
+      });
+      chip.appendChild(close);
+      attachmentsEl.appendChild(chip);
+    });
+  }
+
+  function renderAttachmentPreview(list) {
+    if (!list || list.length === 0) return '';
+    const items = list.map((a) => {
+      const name = escapeHtml(a.name || '');
+      const icon = a.kind === 'image'
+        ? '<svg class="attach-chip-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
+        : '<svg class="attach-chip-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+      return `<span class="attach-chip">${icon}<span class="attach-chip-name">${name}</span></span>`;
+    }).join('');
+    return `<div class="msg-attachments">${items}</div>`;
+  }
 
   // -------- Markdown (minimal, safe) --------
   function escapeHtml(s) {
@@ -169,11 +228,14 @@
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
   }
+  if (attachBtn) {
+    attachBtn.addEventListener('click', () => vscode.postMessage({ type: 'pickAttachment' }));
+  }
 
   function submit() {
     if (isStreaming) return;
     const text = inputEl.value.trim();
-    if (!text) return;
+    if (!text && pendingAttachments.length === 0) return;
 
     if (text === '/clear') {
       inputEl.value = ''; autoresize();
@@ -192,15 +254,20 @@
         '',
         '- `/clear` — clear the conversation',
         '- `/settings` — open extension settings',
+        '- Click the 📎 icon to attach images or text files',
         '- `Enter` send · `Shift+Enter` newline',
-        '- Click the ⚙ icon next to the input to open settings any time.'
+        '- Toggle `yamakawaCode.workspaceTools` to let the AI read/write project files.'
       ].join('\n')));
       return;
     }
 
+    const attachments = pendingAttachments.slice();
+    pendingAttachments = [];
+    renderAttachmentChips();
+
     inputEl.value = '';
     autoresize();
-    vscode.postMessage({ type: 'send', text });
+    vscode.postMessage({ type: 'send', text, attachments });
   }
 
   // -------- Inbound messages --------
@@ -220,9 +287,11 @@
         }
         break;
       }
-      case 'userMessage':
-        appendMessage('user', escapeHtml(msg.content));
+      case 'userMessage': {
+        const attachHtml = renderAttachmentPreview(msg.attachments);
+        appendMessage('user', attachHtml + escapeHtml(msg.content || ''));
         break;
+      }
       case 'assistantStart':
         startAssistantMessage();
         startTypingLoop();
@@ -248,6 +317,21 @@
       case 'themeUpdate':
         applyTheme(msg.theme || {});
         if (msg.status && statusModelEl) statusModelEl.textContent = msg.status.model || '';
+        break;
+      case 'attachmentsPicked':
+        if (Array.isArray(msg.attachments)) {
+          for (const a of msg.attachments) {
+            pendingAttachments.push({ kind: a.kind, name: a.name, mime: a.mime, data: a.data });
+          }
+          renderAttachmentChips();
+          inputEl.focus();
+        }
+        break;
+      case 'toolResult':
+        if (Array.isArray(msg.summary)) {
+          const lines = msg.summary.map((s) => `> ${s.ok ? '\u2713' : '\u2717'} **${s.name}** — ${escapeHtml(s.snippet || '')}`).join('\n');
+          if (lines) appendMessage('assistant', renderMarkdown(lines));
+        }
         break;
     }
   });
