@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Picks the first existing icon file in media/ (jpg > jpeg > png > svg).
-// If a raster icon is chosen, auto-generates media/icon.auto.svg and uses it
-// for activity bar/view icons to maximize VS Code compatibility.
+// Activity bar/view icons ALWAYS prefer media/icon.svg (monochrome SVG),
+// because VS Code renders that reliably. Raster files are still used for the
+// package icon and for the in-webview logo.
 //
 // Usage:  npm run set-icon
 //
@@ -11,9 +12,8 @@
 //   media/icon.jpg
 //   media/icon.jpeg
 //
-// Note: VS Code's activity bar expects SVG for the most reliable rendering.
-// This script keeps raster for package.icon (marketplace) but routes activity
-// bar/view icons through an auto-generated SVG wrapper when needed.
+// Note: Wrapping jpg/png into an SVG <image> can appear as a black blob in the
+// activity bar. So we keep activity/view bound to icon.svg whenever possible.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -58,7 +58,8 @@ function buildWrappedSvg(dataUri) {
   ].join('\n');
 }
 
-let activityIconPath = iconPath;
+const hasMonoSvg = existsSync(resolve(mediaDir, 'icon.svg'));
+let activityIconPath = hasMonoSvg ? 'media/icon.svg' : iconPath;
 if (isRaster) {
   const raw = readFileSync(resolve(mediaDir, chosen));
   const dataUri = `data:${mimeFromFile(chosen)};base64,${raw.toString('base64')}`;
@@ -69,7 +70,11 @@ if (isRaster) {
     writeFileSync(autoSvgPath, wrappedSvg, 'utf8');
     generatedSvg = true;
   }
-  activityIconPath = `media/${autoSvgName}`;
+  // Keep generated file for optional fallback/debug, but do not force it as
+  // activity icon when icon.svg exists.
+  if (!hasMonoSvg) {
+    activityIconPath = `media/${autoSvgName}`;
+  }
 }
 
 // Activity bar container
@@ -109,4 +114,8 @@ if (changed) {
 
 if (generatedSvg) {
   console.log(`Generated media/${autoSvgName} from ${chosen}.`);
+}
+
+if (hasMonoSvg) {
+  console.log('Activity/view icons are pinned to media/icon.svg for proper VS Code rendering.');
 }

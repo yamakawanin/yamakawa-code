@@ -127,7 +127,7 @@ npm run set-icon
 
 该脚本会自动扫描 `media/` 目录，并把 `package.json` 中 `viewsContainers.activitybar`、`views`、以及插件市场图标（仅当图片为 `.png/.jpg/.jpeg` 时）的 `icon` 字段更新为最新文件。改完后重新加载窗口（命令面板 → *Developer: Reload Window*）即可。
 
-当检测到 `icon.jpg` / `icon.jpeg` / `icon.png` 时，脚本还会自动生成 `media/icon.auto.svg`，并把左侧活动栏图标指向这个 SVG，以提高活动栏显示兼容性。
+当检测到 `icon.jpg` / `icon.jpeg` / `icon.png` 时，脚本会自动生成 `media/icon.auto.svg` 作为备用文件；但左侧活动栏图标会优先固定使用 `media/icon.svg`（单色 SVG），避免出现“黑块/黑团”显示问题。
 
 ### 📌 关于活动栏图标的小贴士
 
