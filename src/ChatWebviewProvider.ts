@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { ChatMessage, streamChatCompletion } from './api';
+import { ChatMessage, Provider, streamChatCompletion } from './api';
 
 interface StoredMessage {
   role: 'user' | 'assistant';
@@ -92,23 +92,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     if (!this.view) return;
 
     const cfg = vscode.workspace.getConfiguration('yamakawaCode');
-    const baseUrl = cfg.get<string>('baseUrl', 'https://apic1.ohmycdn.com/v1');
+    const provider = (cfg.get<string>('provider', 'openai') as Provider) || 'openai';
+    const baseUrl = (cfg.get<string>('baseUrl', '') || '').trim() || defaultBaseUrl(provider);
     const model = cfg.get<string>('model', 'gpt-4.1');
     const temperature = cfg.get<number>('temperature', 0.7);
     const systemPrompt = cfg.get<string>('systemPrompt', '');
     const configKey = cfg.get<string>('apiKey', '').trim();
 
-    const apiKey =
-      configKey ||
-      process.env.OPENAI_API_KEY ||
-      process.env.OHMYGPT_API_KEY ||
-      '';
+    const apiKey = configKey || resolveEnvKey(provider);
 
-    if (!apiKey) {
+    if (!apiKey && provider !== 'ollama') {
       this.view.webview.postMessage({
         type: 'error',
-        message:
-          'No API key found. Set `OPENAI_API_KEY` or `OHMYGPT_API_KEY` in your environment, or configure `yamakawaCode.apiKey` in Settings.'
+        message: missingKeyMessage(provider)
       });
       return;
     }
@@ -127,7 +123,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     let assembled = '';
 
     this.abortCurrent = streamChatCompletion(
-      { baseUrl, apiKey, model, temperature, messages },
+      { provider, baseUrl, apiKey, model, temperature, messages },
       {
         onDelta: (delta) => {
           assembled += delta;
@@ -267,7 +263,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       foreground: cfg.get<string>('foreground', ''),
       muted: cfg.get<string>('muted', ''),
       border: cfg.get<string>('border', ''),
-      fontFamily: cfg.get<string>('fontFamily', '')
+      fontFamily: cfg.get<string>('fontFamily', ''),
+      fontSerif: cfg.get<string>('fontSerif', ''),
+      fontMono: cfg.get<string>('fontMono', '')
     };
   }
 
@@ -287,7 +285,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     if (theme.foreground) lines.push(`--yk-fg: ${theme.foreground};`);
     if (theme.muted) lines.push(`--yk-muted: ${theme.muted};`);
     if (theme.border) lines.push(`--yk-border: ${theme.border};`);
-    if (theme.fontFamily) lines.push(`--yk-font: ${theme.fontFamily};`);
+    if (theme.fontFamily) lines.push(`--yk-font-ui: ${theme.fontFamily};`);
+    if (theme.fontSerif) lines.push(`--yk-font-serif: ${theme.fontSerif};`);
+    if (theme.fontMono) lines.push(`--yk-font-mono: ${theme.fontMono};`);
     lines.push('}');
     return lines.join('\n');
   }
@@ -306,4 +306,41 @@ function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   for (let i = 0; i < 32; i++) text += chars.charAt(Math.floor(Math.random() * chars.length));
   return text;
+}
+
+function defaultBaseUrl(provider: Provider): string {
+  switch (provider) {
+    case 'anthropic': return 'https://api.anthropic.com';
+    case 'gemini':    return 'https://generativelanguage.googleapis.com';
+    case 'ollama':    return 'http://localhost:11434';
+    case 'openai':
+    default:          return 'https://apic1.ohmycdn.com/v1';
+  }
+}
+
+function resolveEnvKey(provider: Provider): string {
+  const env = process.env;
+  switch (provider) {
+    case 'anthropic':
+      return (env.ANTHROPIC_API_KEY || env.CLAUDE_API_KEY || '').trim();
+    case 'gemini':
+      return (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENERATIVE_AI_API_KEY || '').trim();
+    case 'ollama':
+      return '';
+    case 'openai':
+    default:
+      return (env.OPENAI_API_KEY || env.OHMYGPT_API_KEY || '').trim();
+  }
+}
+
+function missingKeyMessage(provider: Provider): string {
+  switch (provider) {
+    case 'anthropic':
+      return 'No Anthropic API key. Set `ANTHROPIC_API_KEY` env var or configure `yamakawaCode.apiKey` in Settings.';
+    case 'gemini':
+      return 'No Gemini API key. Set `GEMINI_API_KEY` env var or configure `yamakawaCode.apiKey` in Settings.';
+    case 'openai':
+    default:
+      return 'No API key. Set `OPENAI_API_KEY` / `OHMYGPT_API_KEY` env var or configure `yamakawaCode.apiKey` in Settings.';
+  }
 }

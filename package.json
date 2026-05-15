@@ -1,7 +1,7 @@
 {
   "name": "yamakawa-code",
   "displayName": "Yamakawa Code",
-  "description": "A Claude Code–style chat sidebar for VS Code, powered by an OpenAI-compatible backend.",
+  "description": "A Claude Code–style chat sidebar for VS Code. Works with OpenAI-compatible, Anthropic, Google Gemini, and Ollama backends.",
   "version": "0.1.0",
   "publisher": "yamakawanin",
   "engines": {
@@ -65,10 +65,22 @@
     "configuration": {
       "title": "Yamakawa Code",
       "properties": {
+        "yamakawaCode.provider": {
+          "type": "string",
+          "enum": ["openai", "anthropic", "gemini", "ollama"],
+          "enumDescriptions": [
+            "OpenAI / any OpenAI-compatible API (OhMyGPT, DeepSeek, Moonshot, Groq, OpenRouter, xAI, Together, Azure OpenAI, etc.)",
+            "Anthropic Claude (api.anthropic.com)",
+            "Google Gemini (generativelanguage.googleapis.com)",
+            "Ollama (local models, default http://localhost:11434)"
+          ],
+          "default": "openai",
+          "description": "Which AI provider to talk to. Adjust baseUrl and model accordingly."
+        },
         "yamakawaCode.baseUrl": {
           "type": "string",
-          "default": "https://apic1.ohmycdn.com/v1",
-          "description": "Base URL for the OpenAI-compatible API (without /chat/completions)."
+          "default": "",
+          "markdownDescription": "Base URL for the API. Leave empty to use the default for the selected provider. Common values:\n- OpenAI: `https://api.openai.com/v1`\n- OhMyGPT: `https://apic1.ohmycdn.com/v1` *(default for `openai` provider)*\n- DeepSeek: `https://api.deepseek.com/v1`\n- Moonshot (Kimi): `https://api.moonshot.cn/v1`\n- Groq: `https://api.groq.com/openai/v1`\n- OpenRouter: `https://openrouter.ai/api/v1`\n- xAI: `https://api.x.ai/v1`\n- Anthropic: `https://api.anthropic.com` *(default for `anthropic`)*\n- Gemini: `https://generativelanguage.googleapis.com` *(default for `gemini`)*\n- Ollama: `http://localhost:11434` *(default for `ollama`)*"
         },
         "yamakawaCode.model": {
           "type": "string",
@@ -78,8 +90,7 @@
         "yamakawaCode.apiKey": {
           "type": "string",
           "default": "",
-          "description": "Optional API key. If empty, OPENAI_API_KEY or OHMYGPT_API_KEY environment variables will be used.",
-          "markdownDescription": "Optional API key. If empty, `OPENAI_API_KEY` or `OHMYGPT_API_KEY` environment variables will be used."
+          "markdownDescription": "API key for the selected provider. If empty, the extension reads (in order): `OPENAI_API_KEY`, `OHMYGPT_API_KEY` (openai), `ANTHROPIC_API_KEY` (anthropic), `GEMINI_API_KEY` / `GOOGLE_API_KEY` (gemini). Not required for Ollama."
         },
         "yamakawaCode.systemPrompt": {
           "type": "string",
@@ -121,7 +132,17 @@
         "yamakawaCode.theme.fontFamily": {
           "type": "string",
           "default": "",
-          "description": "Override the chat font family (e.g. 'JetBrains Mono', 'SF Mono'). Leave empty for the default."
+          "description": "Override the UI font (Claude.ai uses a Styrene-like sans). Example: 'Inter, system-ui'."
+        },
+        "yamakawaCode.theme.fontSerif": {
+          "type": "string",
+          "default": "",
+          "description": "Override the serif font used for AI replies (Claude.ai uses a Tiempos-like serif). Example: 'Charter, Georgia, serif'."
+        },
+        "yamakawaCode.theme.fontMono": {
+          "type": "string",
+          "default": "",
+          "description": "Override the monospace font used for code blocks. Example: 'JetBrains Mono, SF Mono, monospace'."
         }
       }
     }

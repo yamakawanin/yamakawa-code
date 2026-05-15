@@ -42,10 +42,37 @@ npm run compile
 | 顺序 | 来源 | 说明 |
 | --- | --- | --- |
 | 1 | VS Code 设置 `yamakawaCode.apiKey` | 在 Settings 中搜索 *Yamakawa Code* 填入 |
-| 2 | 环境变量 `OPENAI_API_KEY` | 终端 `export OPENAI_API_KEY=sk-...` 后重启 VS Code |
-| 3 | 环境变量 `OHMYGPT_API_KEY` | 同上 |
+| 2 | 对应供应商的环境变量（见下） | 终端 `export XXX=...` 后重启 VS Code |
+
+各 provider 读取的环境变量：
+
+| Provider | 环境变量（按顺序回退） |
+| --- | --- |
+| `openai` | `OPENAI_API_KEY` → `OHMYGPT_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` → `CLAUDE_API_KEY` |
+| `gemini` | `GEMINI_API_KEY` → `GOOGLE_API_KEY` → `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `ollama` | 不需要（本地） |
 
 > ⚠️ 在 macOS 上，从 Dock 启动的 VS Code 可能读不到 shell 的环境变量。最稳妥的做法是直接在 **设置** 里填，或从终端执行 `code .` 启动 VS Code。
+
+---
+
+## 🌐 多 Provider 支持
+
+通过 `yamakawaCode.provider` 切换后端，`baseUrl` 留空会自动使用对应默认值：
+
+| Provider | 默认 baseUrl | 适用 |
+| --- | --- | --- |
+| `openai` | `https://apic1.ohmycdn.com/v1` | OpenAI / OhMyGPT / DeepSeek / Moonshot (Kimi) / Groq / OpenRouter / xAI / Together / Azure OpenAI 等所有 OpenAI 兼容接口 |
+| `anthropic` | `https://api.anthropic.com` | Claude 官方 API |
+| `gemini` | `https://generativelanguage.googleapis.com` | Google Gemini |
+| `ollama` | `http://localhost:11434` | 本地模型（无需 API Key） |
+
+切换示例：
+- **Claude 官方**：provider = `anthropic`，model = `claude-sonnet-4-20250514`，apiKey 填 `sk-ant-...`
+- **DeepSeek**：provider = `openai`，baseUrl = `https://api.deepseek.com/v1`，model = `deepseek-chat`
+- **Gemini**：provider = `gemini`，model = `gemini-2.5-flash`，apiKey 填 Google AI Studio 的 key
+- **本地 Ollama**：provider = `ollama`，model = `llama3.1`（或任何已 `ollama pull` 的模型）
 
 ---
 
@@ -55,11 +82,17 @@ npm run compile
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `yamakawaCode.baseUrl` | `https://apic1.ohmycdn.com/v1` | OpenAI 兼容接口的基础 URL（不含 `/chat/completions`） |
-| `yamakawaCode.model` | `gpt-4.1` | 默认使用的模型 |
+| `yamakawaCode.provider` | `openai` | 后端类型：`openai` / `anthropic` / `gemini` / `ollama` |
+| `yamakawaCode.baseUrl` | （空，按 provider 自动） | 接口基础 URL；留空走对应默认 |
+| `yamakawaCode.model` | `gpt-4.1` | 默认模型 |
 | `yamakawaCode.apiKey` | （空） | API Key；留空时回落到环境变量 |
 | `yamakawaCode.systemPrompt` | 内置专业 Pair-Programmer 提示词 | 每轮对话的系统提示词 |
 | `yamakawaCode.temperature` | `0.7` | 采样温度（0~2） |
+| `yamakawaCode.theme.accent` | `#c96442` | 主色（暖珊瑚） |
+| `yamakawaCode.theme.background` `.foreground` `.muted` `.border` | （空） | 各色覆盖；空则跟随 VS Code |
+| `yamakawaCode.theme.fontFamily` | （空）| UI 字体（Styrene 风的无衬线） |
+| `yamakawaCode.theme.fontSerif` | （空）| AI 回复正文衬线字体（Tiempos 风） |
+| `yamakawaCode.theme.fontMono` | （空）| 代码块等宽字体 |
 
 ---
 
