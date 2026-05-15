@@ -4,3 +4,20 @@ out/
 .DS_Store
 .vscode-test/
 *.log
+
+# Local env and secret files
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.test
+!.env.example
+
+# Private keys and certs
+*.pem
+*.p12
+*.pfx
+*.key
+id_rsa
+id_rsa.pub

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import shutil
 import subprocess
 import sys
@@ -56,11 +57,60 @@ def default_commit_message() -> str:
     return f"chore: update project ({now})"
 
 
+def staged_files(cwd: Path) -> list[str]:
+    result = run_cmd(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def find_secret_issues(cwd: Path) -> list[str]:
+    issues: list[str] = []
+    files = staged_files(cwd)
+    if not files:
+        return issues
+
+    sensitive_file_re = [
+        re.compile(r"(^|/)\.env(\.|$)", re.IGNORECASE),
+        re.compile(r"(^|/)id_rsa(\.pub)?$", re.IGNORECASE),
+        re.compile(r"\.(pem|p12|pfx|key)$", re.IGNORECASE),
+    ]
+
+    secret_re = [
+        re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[\"'][^\"']{8,}[\"']"),
+        re.compile(r"sk-[A-Za-z0-9]{20,}"),
+        re.compile(r"ghp_[A-Za-z0-9]{30,}"),
+        re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
+        re.compile(r"AIza[0-9A-Za-z\-_]{35}"),
+    ]
+
+    for rel in files:
+        if any(p.search(rel) for p in sensitive_file_re):
+            issues.append(f"Sensitive filename staged: {rel}")
+
+        abs_path = cwd / rel
+        if not abs_path.exists() or not abs_path.is_file():
+            continue
+
+        try:
+            content = abs_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+        if any(p.search(content) for p in secret_re):
+            issues.append(f"Possible secret detected in file: {rel}")
+
+    return issues
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="One-click update project to GitHub")
     parser.add_argument("-m", "--message", help="Commit message")
     parser.add_argument("--remote", default="origin", help="Remote name (default: origin)")
     parser.add_argument("--branch", help="Branch name (default: current branch)")
+    parser.add_argument(
+        "--allow-secrets",
+        action="store_true",
+        help="Bypass secret detection (NOT recommended)",
+    )
     parser.add_argument(
         "--cwd",
         default=".",
@@ -86,6 +136,16 @@ def main() -> int:
 
     try:
         run_cmd(["git", "add", "-A"], cwd)
+
+        if not args.allow_secrets:
+            issues = find_secret_issues(cwd)
+            if issues:
+                print("\nSafety check failed. Possible secrets detected in staged changes:")
+                for item in issues:
+                    print(f"- {item}")
+                print("\nPlease remove secrets, update .gitignore, or use --allow-secrets if you are sure.")
+                return 1
+
         run_cmd(["git", "commit", "-m", message], cwd)
 
         # Rebase local branch on top of latest remote branch before push.
