@@ -21,6 +21,20 @@
 
 ## 🚀 快速开始
 
+### 0. 一键自动配置（推荐给新同事/新设备）
+
+克隆仓库后，直接执行一条命令即可完成依赖安装与编译：
+
+```bash
+python3 scripts/bootstrap_project.py
+```
+
+或：
+
+```bash
+npm run bootstrap
+```
+
 ### 1. 安装依赖并编译
 
 ```bash
@@ -84,7 +98,7 @@ npm run compile
 | --- | --- | --- |
 | `yamakawaCode.provider` | `openai` | 后端类型：`openai` / `anthropic` / `gemini` / `ollama` |
 | `yamakawaCode.baseUrl` | （空，按 provider 自动） | 接口基础 URL；留空走对应默认 |
-| `yamakawaCode.model` | `gpt-4.1` | 默认模型 |
+| `yamakawaCode.model` | `gpt-5.2` | 默认模型 |
 | `yamakawaCode.apiKey` | （空） | API Key；留空时回落到环境变量 |
 | `yamakawaCode.systemPrompt` | 内置专业 Pair-Programmer 提示词 | 每轮对话的系统提示词 |
 | `yamakawaCode.temperature` | `0.7` | 采样温度（0~2） |
@@ -155,7 +169,10 @@ yamakawa code/
 │   ├── main.css
 │   └── main.js
 ├── scripts/
-│   └── set-icon.mjs      # 自动同步 package.json 图标路径
+│   ├── set-icon.mjs              # 自动同步 package.json 图标路径
+│   ├── bootstrap_project.py      # 一键初始化（安装依赖 + 编译）
+│   ├── update_github.py          # 安全提交并推送到 GitHub
+│   └── publish_extension.py      # 一键打包/发布 VS Code 插件
 ├── src/
 │   ├── extension.ts      # 扩展激活入口
 │   ├── ChatWebviewProvider.ts  # 侧边栏 Webview 实现
@@ -183,6 +200,33 @@ A：是的，历史保存在 `workspaceState` 中，不同工作区互不影响�
 ---
 
 ## 📦 打包发布（可选）
+
+推荐直接使用项目内置发布命令：
+
+```bash
+export VSCE_PAT=your_marketplace_pat
+npm run release:patch
+```
+
+也可以用 Python 发布脚本：
+
+```bash
+python3 scripts/publish_extension.py --bump patch
+```
+
+仅打包检查（不发布）：
+
+```bash
+npm run release:check
+```
+
+如果你只想推送代码到 GitHub（不是发布插件）：
+
+```bash
+python3 scripts/update_github.py -m "chore: update"
+```
+
+底层 `vsce` 命令方式：
 
 ```bash
 npm install -g @vscode/vsce

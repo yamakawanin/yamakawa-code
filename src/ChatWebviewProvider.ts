@@ -167,7 +167,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const cfg = vscode.workspace.getConfiguration('yamakawaCode');
     const provider = (cfg.get<string>('provider', 'openai') as Provider) || 'openai';
     const baseUrl = (cfg.get<string>('baseUrl', '') || '').trim() || defaultBaseUrl(provider);
-    const model = cfg.get<string>('model', 'gpt-4.1');
+    const model = cfg.get<string>('model', 'gpt-5.2');
     const temperature = cfg.get<number>('temperature', 0.7);
     const userSystemPrompt = cfg.get<string>('systemPrompt', '');
     const workspaceTools = cfg.get<boolean>('workspaceTools', true);
@@ -448,7 +448,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const baseUrl = (cfg.get<string>('baseUrl', '') || '').trim() || defaultBaseUrl(provider);
     return {
       provider,
-      model: cfg.get<string>('model', 'gpt-4.1'),
+      model: cfg.get<string>('model', 'gpt-5.2'),
       baseUrl,
       cwd: folder
     };
