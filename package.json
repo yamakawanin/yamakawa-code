@@ -92,6 +92,36 @@
           "minimum": 0,
           "maximum": 2,
           "description": "Sampling temperature."
+        },
+        "yamakawaCode.theme.accent": {
+          "type": "string",
+          "default": "#c96442",
+          "description": "Accent color (Claude-style warm coral). Any CSS color."
+        },
+        "yamakawaCode.theme.background": {
+          "type": "string",
+          "default": "",
+          "description": "Chat background color. Leave empty to follow VS Code sidebar background."
+        },
+        "yamakawaCode.theme.foreground": {
+          "type": "string",
+          "default": "",
+          "description": "Primary text color. Leave empty to follow VS Code foreground."
+        },
+        "yamakawaCode.theme.muted": {
+          "type": "string",
+          "default": "",
+          "description": "Muted / secondary text color. Leave empty for an automatic value."
+        },
+        "yamakawaCode.theme.border": {
+          "type": "string",
+          "default": "",
+          "description": "Border / divider color. Leave empty for an automatic value."
+        },
+        "yamakawaCode.theme.fontFamily": {
+          "type": "string",
+          "default": "",
+          "description": "Override the chat font family (e.g. 'JetBrains Mono', 'SF Mono'). Leave empty for the default."
         }
       }
     }
