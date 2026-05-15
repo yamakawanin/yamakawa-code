@@ -1,0 +1,114 @@
+{
+  "name": "yamakawa-code",
+  "displayName": "Yamakawa Code",
+  "description": "A Claude Code–style chat sidebar for VS Code, powered by an OpenAI-compatible backend.",
+  "version": "0.1.0",
+  "publisher": "yamakawanin",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Chat"
+  ],
+  "keywords": [
+    "ai",
+    "chat",
+    "openai",
+    "claude",
+    "assistant"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yamakawaCode",
+          "title": "Yamakawa Code",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "yamakawaCode": [
+        {
+          "type": "webview",
+          "id": "yamakawaCode.chatView",
+          "name": "Chat",
+          "icon": "media/icon.svg",
+          "contextualTitle": "Yamakawa Code"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "yamakawaCode.clearChat",
+        "title": "Yamakawa Code: Clear Chat History",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "yamakawaCode.focusInput",
+        "title": "Yamakawa Code: Focus Chat Input"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "yamakawaCode.clearChat",
+          "when": "view == yamakawaCode.chatView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Yamakawa Code",
+      "properties": {
+        "yamakawaCode.baseUrl": {
+          "type": "string",
+          "default": "https://apic1.ohmycdn.com/v1",
+          "description": "Base URL for the OpenAI-compatible API (without /chat/completions)."
+        },
+        "yamakawaCode.model": {
+          "type": "string",
+          "default": "gpt-5.2-codex",
+          "description": "Default model name used for chat completions."
+        },
+        "yamakawaCode.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional API key. If empty, OPENAI_API_KEY or OHMYGPT_API_KEY environment variables will be used.",
+          "markdownDescription": "Optional API key. If empty, `OPENAI_API_KEY` or `OHMYGPT_API_KEY` environment variables will be used."
+        },
+        "yamakawaCode.systemPrompt": {
+          "type": "string",
+          "default": "You are Yamakawa Code, a concise, expert pair-programmer. Reply in the user's language. Use Markdown and fenced code blocks for code.",
+          "description": "System prompt used for every conversation."
+        },
+        "yamakawaCode.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yamakawanin/yamakawa-code.git"
+  },
+  "license": "MIT"
+}
