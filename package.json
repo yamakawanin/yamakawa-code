@@ -161,7 +161,11 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "set-icon": "node scripts/set-icon.mjs"
+    "set-icon": "node scripts/set-icon.mjs",
+    "release:check": "npm run compile && npx @vscode/vsce package",
+    "release:patch": "npm run compile && npx @vscode/vsce publish patch",
+    "release:minor": "npm run compile && npx @vscode/vsce publish minor",
+    "release:major": "npm run compile && npx @vscode/vsce publish major"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

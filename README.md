@@ -33,4 +33,25 @@ npm install
 npm run compile
 ```
 
+## Release
+
+Set Marketplace token first:
+
+```bash
+export VSCE_PAT=your_marketplace_pat
+```
+
+Then use one command:
+
+```bash
+npm run release:patch
+```
+
+Other version bumps:
+
+```bash
+npm run release:minor
+npm run release:major
+```
+
 Press `F5` in VS Code to launch the Extension Development Host.
