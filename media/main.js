@@ -97,7 +97,7 @@
     return `<div class="msg-attachments">${items}</div>`;
   }
 
-  // -------- Markdown (minimal, safe) --------
+  // -------- Markdown (safe, improved) --------
   function escapeHtml(s) {
     return s
       .replace(/&/g, '&amp;')
@@ -107,52 +107,156 @@
       .replace(/'/g, '&#39;');
   }
 
-  function renderMarkdown(src) {
+  function renderInline(src) {
     if (!src) return '';
-    const codeBlocks = [];
-    let s = src.replace(/```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      const token = `\u0000CODE${codeBlocks.length}\u0000`;
-      const escaped = escapeHtml(code.replace(/\n$/, ''));
-      codeBlocks.push(`<pre><code${lang ? ` class="lang-${escapeHtml(lang)}"` : ''}>${escaped}</code></pre>`);
+    let s = escapeHtml(src);
+
+    const codeSpans = [];
+    s = s.replace(/`([^`\n]+)`/g, (_, code) => {
+      const token = `\u0000INL${codeSpans.length}\u0000`;
+      codeSpans.push(`<code>${code}</code>`);
       return token;
     });
 
-    s = escapeHtml(s);
-
-    s = s.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
-    s = s.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
-    s = s.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
-    s = s.replace(/^---$/gm, '<hr/>');
-    s = s.replace(/(^|\n)&gt;\s?(.*?)(?=\n|$)/g, '$1<blockquote>$2</blockquote>');
-    s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`);
-    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/(^|[\s_])_([^_\n]+)_(?=[\s.,!?)]|$)/g, '$1<em>$2</em>');
-    s = s.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s.,!?)]|$)/g, '$1<em>$2</em>');
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) => {
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
     });
-    s = s.replace(/(?:^|\n)((?:[-*]\s.+(?:\n|$))+)/g, (_, block) => {
-      const items = block.trim().split(/\n/)
-        .map((l) => l.replace(/^[-*]\s+/, ''))
-        .map((l) => `<li>${l}</li>`).join('');
-      return `\n<ul>${items}</ul>`;
-    });
-    s = s.replace(/(?:^|\n)((?:\d+\.\s.+(?:\n|$))+)/g, (_, block) => {
-      const items = block.trim().split(/\n/)
-        .map((l) => l.replace(/^\d+\.\s+/, ''))
-        .map((l) => `<li>${l}</li>`).join('');
-      return `\n<ol>${items}</ol>`;
-    });
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*(?=[^*]|$)/g, '$1<em>$2</em>');
+    s = s.replace(/(^|[^_])_([^_\n]+)_(?=[^_]|$)/g, '$1<em>$2</em>');
+    s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
 
-    const blocks = s.split(/\n{2,}/).map((b) => {
-      const t = b.trim();
-      if (!t) return '';
-      if (/^<(h\d|ul|ol|pre|blockquote|hr)/.test(t)) return t;
-      return `<p>${t.replace(/\n/g, '<br/>')}</p>`;
-    });
-    s = blocks.join('\n');
-    s = s.replace(/\u0000CODE(\d+)\u0000/g, (_, i) => codeBlocks[Number(i)] || '');
+    s = s.replace(/\u0000INL(\d+)\u0000/g, (_, i) => codeSpans[Number(i)] || '');
     return s;
+  }
+
+  function parseTable(lines) {
+    if (lines.length < 2) return null;
+    const header = lines[0].trim();
+    const divider = lines[1].trim();
+    if (!header.includes('|')) return null;
+    if (!/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(divider)) return null;
+
+    const splitRow = (row) => row.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    const headers = splitRow(header);
+    const body = lines.slice(2).map(splitRow).filter((r) => r.length > 0);
+
+    const thead = `<thead><tr>${headers.map((c) => `<th>${renderInline(c)}</th>`).join('')}</tr></thead>`;
+    const tbody = body.length
+      ? `<tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${renderInline(c)}</td>`).join('')}</tr>`).join('')}</tbody>`
+      : '';
+    return `<table>${thead}${tbody}</table>`;
+  }
+
+  function renderMarkdown(src) {
+    if (!src) return '';
+    const lines = src.replace(/\r\n?/g, '\n').split('\n');
+    const out = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (!trimmed) {
+        i += 1;
+        continue;
+      }
+
+      const codeOpen = line.match(/^```([a-zA-Z0-9_+\-]*)\s*$/);
+      if (codeOpen) {
+        const lang = codeOpen[1] || '';
+        i += 1;
+        const codeLines = [];
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+          codeLines.push(lines[i]);
+          i += 1;
+        }
+        if (i < lines.length) i += 1;
+        out.push(`<pre><code${lang ? ` class="lang-${escapeHtml(lang)}"` : ''}>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        continue;
+      }
+
+      if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(trimmed)) {
+        out.push('<hr/>');
+        i += 1;
+        continue;
+      }
+
+      const heading = line.match(/^(#{1,3})\s+(.+)$/);
+      if (heading) {
+        const level = heading[1].length;
+        out.push(`<h${level}>${renderInline(heading[2].trim())}</h${level}>`);
+        i += 1;
+        continue;
+      }
+
+      if (/^>\s?/.test(trimmed)) {
+        const quoteLines = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+          quoteLines.push(lines[i].replace(/^\s*>\s?/, ''));
+          i += 1;
+        }
+        out.push(`<blockquote>${renderMarkdown(quoteLines.join('\n'))}</blockquote>`);
+        continue;
+      }
+
+      const ulMatch = line.match(/^\s*[-*]\s+(.+)$/);
+      if (ulMatch) {
+        const items = [];
+        while (i < lines.length) {
+          const m = lines[i].match(/^\s*[-*]\s+(.+)$/);
+          if (!m) break;
+          items.push(`<li>${renderInline(m[1])}</li>`);
+          i += 1;
+        }
+        out.push(`<ul>${items.join('')}</ul>`);
+        continue;
+      }
+
+      const olMatch = line.match(/^\s*\d+\.\s+(.+)$/);
+      if (olMatch) {
+        const items = [];
+        while (i < lines.length) {
+          const m = lines[i].match(/^\s*\d+\.\s+(.+)$/);
+          if (!m) break;
+          items.push(`<li>${renderInline(m[1])}</li>`);
+          i += 1;
+        }
+        out.push(`<ol>${items.join('')}</ol>`);
+        continue;
+      }
+
+      if (trimmed.includes('|') && i + 1 < lines.length) {
+        const tableLines = [];
+        let k = i;
+        while (k < lines.length && lines[k].trim() && lines[k].includes('|')) {
+          tableLines.push(lines[k]);
+          k += 1;
+        }
+        const table = parseTable(tableLines);
+        if (table) {
+          out.push(table);
+          i = k;
+          continue;
+        }
+      }
+
+      const para = [];
+      while (i < lines.length && lines[i].trim()) {
+        if (/^(#{1,3})\s+/.test(lines[i])) break;
+        if (/^\s*```/.test(lines[i])) break;
+        if (/^\s*>\s?/.test(lines[i])) break;
+        if (/^\s*[-*]\s+/.test(lines[i])) break;
+        if (/^\s*\d+\.\s+/.test(lines[i])) break;
+        if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])) break;
+        para.push(lines[i]);
+        i += 1;
+      }
+      out.push(`<p>${renderInline(para.join('\n')).replace(/\n/g, '<br/>')}</p>`);
+    }
+
+    return out.join('\n');
   }
 
   // -------- DOM helpers --------
