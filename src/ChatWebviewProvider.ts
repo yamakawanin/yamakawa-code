@@ -60,6 +60,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     // Replay history once the webview is ready
     view.webview.postMessage({ type: 'hydrate', history: this.history });
+    view.webview.postMessage({ type: 'runtimeStatus', status: this.readStatusConfig() });
   }
 
   public clearChat(): void {
@@ -167,6 +168,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const configKey = cfg.get<string>('apiKey', '').trim();
 
     const apiKey = configKey || resolveEnvKey(provider);
+
+    this.view.webview.postMessage({
+      type: 'runtimeStatus',
+      status: { provider, model, baseUrl, cwd: this.readStatusConfig().cwd }
+    });
 
     if (!apiKey && provider !== 'ollama') {
       this.view.webview.postMessage({ type: 'error', message: missingKeyMessage(provider) });
@@ -325,7 +331,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           ${logoMarkup}
           <div class="hero-text">
             <div class="hero-title">Welcome to <span class="brand">Yamakawa Code</span></div>
-            <div class="hero-sub">/help for help, /clear to reset · ${escapeAttr(status.model)}</div>
+            <div class="hero-sub">/help for help, /clear to reset · ${escapeAttr(status.model)} · ${escapeAttr(status.baseUrl)}</div>
           </div>
         </div>
         <ul class="tips">
@@ -353,6 +359,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
             <span class="model-pill" id="statusModel" title="Current model">${escapeAttr(status.model)}</span>
+            <span class="model-pill baseurl-pill" id="statusBaseUrl" title="Current base URL">${escapeAttr(status.baseUrl)}</span>
           </div>
           <div class="composer-toolbar-right">
             <span class="statusbar" id="statusbar" aria-hidden="true">
@@ -408,8 +415,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   private readStatusConfig() {
     const cfg = vscode.workspace.getConfiguration('yamakawaCode');
     const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '~';
+    const provider = (cfg.get<string>('provider', 'openai') as Provider) || 'openai';
+    const baseUrl = (cfg.get<string>('baseUrl', '') || '').trim() || defaultBaseUrl(provider);
     return {
+      provider,
       model: cfg.get<string>('model', 'gpt-4.1'),
+      baseUrl,
       cwd: folder
     };
   }
