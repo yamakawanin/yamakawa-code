@@ -27,7 +27,7 @@
         {
           "id": "yamakawaCode",
           "title": "Yamakawa Code",
-          "icon": "media/icon.jpg"
+          "icon": "media/icon.auto.svg"
         }
       ]
     },
@@ -37,7 +37,7 @@
           "type": "webview",
           "id": "yamakawaCode.chatView",
           "name": "Chat",
-          "icon": "media/icon.jpg",
+          "icon": "media/icon.auto.svg",
           "contextualTitle": "Yamakawa Code"
         }
       ]
