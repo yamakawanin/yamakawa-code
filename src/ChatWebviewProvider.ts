@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { ChatMessage, streamChatCompletion } from './api';
 
 interface StoredMessage {
@@ -149,6 +150,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'main.css'));
     const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'main.js'));
+    const logoUri = this.resolveLogoUri(webview);
 
     const csp = [
       `default-src 'none'`,
@@ -157,6 +159,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       `script-src 'nonce-${nonce}'`,
       `font-src ${webview.cspSource}`
     ].join('; ');
+
+    const logoMarkup = logoUri
+      ? `<img class="empty-logo empty-logo-img" src="${logoUri}" alt="Yamakawa Code" />`
+      : `<div class="empty-logo">⌘</div>`;
 
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -167,11 +173,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   <link rel="stylesheet" href="${cssUri}" />
   <title>Yamakawa Code</title>
 </head>
-<body>
+<body data-logo="${logoUri ?? ''}">
   <div class="app">
     <div id="messages" class="messages" role="log" aria-live="polite">
       <div class="empty-state" id="emptyState">
-        <div class="empty-logo">⌘</div>
+        ${logoMarkup}
         <h2>Yamakawa Code</h2>
         <p>Ask anything. Built for code, powered by an OpenAI-compatible model.</p>
       </div>
@@ -200,6 +206,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;
+  }
+
+  /** Picks the first existing icon file in media/, preferring raster for the chat hero. */
+  private resolveLogoUri(webview: vscode.Webview): string | undefined {
+    const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
+    const candidates = ['icon.png', 'icon.jpg', 'icon.jpeg', 'icon.svg'];
+    for (const name of candidates) {
+      const fsPath = vscode.Uri.joinPath(mediaRoot, name).fsPath;
+      if (fs.existsSync(fsPath)) {
+        return webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, name)).toString();
+      }
+    }
+    return undefined;
   }
 }
 

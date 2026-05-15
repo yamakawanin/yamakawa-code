@@ -282,8 +282,12 @@
     const el = document.createElement('div');
     el.className = 'empty-state';
     el.id = 'emptyState';
+    const logo = document.body.getAttribute('data-logo');
+    const logoHtml = logo
+      ? `<img class="empty-logo empty-logo-img" src="${logo}" alt="Yamakawa Code" />`
+      : '<div class="empty-logo">⌘</div>';
     el.innerHTML =
-      '<div class="empty-logo">⌘</div>' +
+      logoHtml +
       '<h2>Yamakawa Code</h2>' +
       "<p>Ask anything. Built for code, powered by an OpenAI-compatible model.</p>";
     return el;

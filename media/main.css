@@ -67,6 +67,11 @@ html, body {
   margin-bottom: 14px;
   box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--yk-accent) 70%, transparent);
 }
+.empty-state .empty-logo-img {
+  background: transparent;
+  object-fit: cover;
+  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.5);
+}
 .empty-state h2 {
   font-size: 15px;
   font-weight: 600;
