@@ -93,7 +93,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     const cfg = vscode.workspace.getConfiguration('yamakawaCode');
     const baseUrl = cfg.get<string>('baseUrl', 'https://apic1.ohmycdn.com/v1');
-    const model = cfg.get<string>('model', 'gpt-5.2-codex');
+    const model = cfg.get<string>('model', 'gpt-4.1');
     const temperature = cfg.get<number>('temperature', 0.7);
     const systemPrompt = cfg.get<string>('systemPrompt', '');
     const configKey = cfg.get<string>('apiKey', '').trim();
@@ -275,7 +275,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const cfg = vscode.workspace.getConfiguration('yamakawaCode');
     const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '~';
     return {
-      model: cfg.get<string>('model', 'gpt-5.2-codex'),
+      model: cfg.get<string>('model', 'gpt-4.1'),
       cwd: folder
     };
   }

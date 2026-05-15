@@ -56,7 +56,7 @@ npm run compile
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `yamakawaCode.baseUrl` | `https://apic1.ohmycdn.com/v1` | OpenAI 兼容接口的基础 URL（不含 `/chat/completions`） |
-| `yamakawaCode.model` | `gpt-5.2-codex` | 默认使用的模型 |
+| `yamakawaCode.model` | `gpt-4.1` | 默认使用的模型 |
 | `yamakawaCode.apiKey` | （空） | API Key；留空时回落到环境变量 |
 | `yamakawaCode.systemPrompt` | 内置专业 Pair-Programmer 提示词 | 每轮对话的系统提示词 |
 | `yamakawaCode.temperature` | `0.7` | 采样温度（0~2） |

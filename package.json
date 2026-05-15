@@ -72,7 +72,7 @@
         },
         "yamakawaCode.model": {
           "type": "string",
-          "default": "gpt-5.2-codex",
+          "default": "gpt-4.1",
           "description": "Default model name used for chat completions."
         },
         "yamakawaCode.apiKey": {
