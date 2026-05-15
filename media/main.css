@@ -438,15 +438,6 @@ html, body {
   flex-shrink: 0;
 }
 
-.baseurl-pill {
-  max-width: 240px;
-  opacity: 0.92;
-}
-
-.baseurl-pill::before {
-  background: color-mix(in srgb, var(--yk-accent) 40%, #888);
-}
-
 .icon-btn, .send-btn {
   display: inline-flex;
   align-items: center;

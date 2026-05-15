@@ -92,6 +92,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         this.clearChat();
         return;
       case 'openSettings':
+        {
+          const s = this.readStatusConfig();
+          void vscode.window.showInformationMessage(
+            `Current runtime: provider=${s.provider}, model=${s.model}, baseUrl=${s.baseUrl}`
+          );
+        }
         vscode.commands.executeCommand('workbench.action.openSettings', 'yamakawaCode');
         return;
       case 'pickAttachment':
@@ -264,6 +270,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   }): Promise<string | null> {
     return new Promise<string | null>((resolve) => {
       let assembled = '';
+      let resolvedModel = opts.model;
       this.abortCurrent = streamChatCompletion(
         { provider: opts.provider, baseUrl: opts.baseUrl, apiKey: opts.apiKey, model: opts.model, temperature: opts.temperature, messages: opts.messages },
         {
@@ -271,7 +278,30 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             assembled += delta;
             this.view?.webview.postMessage({ type: 'assistantDelta', delta });
           },
+          onMeta: (meta) => {
+            if (typeof meta?.model === 'string' && meta.model.trim()) {
+              resolvedModel = meta.model.trim();
+              this.view?.webview.postMessage({
+                type: 'runtimeStatus',
+                status: {
+                  provider: opts.provider,
+                  model: resolvedModel,
+                  baseUrl: opts.baseUrl,
+                  cwd: this.readStatusConfig().cwd
+                }
+              });
+            }
+          },
           onDone: () => {
+            this.view?.webview.postMessage({
+              type: 'runtimeStatus',
+              status: {
+                provider: opts.provider,
+                model: resolvedModel,
+                baseUrl: opts.baseUrl,
+                cwd: this.readStatusConfig().cwd
+              }
+            });
             this.abortCurrent = undefined;
             resolve(assembled);
           },
@@ -331,7 +361,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           ${logoMarkup}
           <div class="hero-text">
             <div class="hero-title">Welcome to <span class="brand">Yamakawa Code</span></div>
-            <div class="hero-sub">/help for help, /clear to reset · ${escapeAttr(status.model)} · ${escapeAttr(status.baseUrl)}</div>
+            <div class="hero-sub">/help for help, /clear to reset · ${escapeAttr(status.model)}</div>
           </div>
         </div>
         <ul class="tips">
@@ -359,7 +389,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
             <span class="model-pill" id="statusModel" title="Current model">${escapeAttr(status.model)}</span>
-            <span class="model-pill baseurl-pill" id="statusBaseUrl" title="Current base URL">${escapeAttr(status.baseUrl)}</span>
           </div>
           <div class="composer-toolbar-right">
             <span class="statusbar" id="statusbar" aria-hidden="true">

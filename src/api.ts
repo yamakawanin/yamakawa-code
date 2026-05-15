@@ -25,6 +25,7 @@ export interface StreamHandlers {
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (err: Error) => void;
+  onMeta?: (meta: { model?: string }) => void;
 }
 
 export interface ChatCompletionOptions {
@@ -91,6 +92,8 @@ function streamOpenAI(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
       if (data === '[DONE]') return;
       try {
         const json = JSON.parse(data);
+        const model = typeof json?.model === 'string' ? json.model : undefined;
+        if (model) handlers.onMeta?.({ model });
         const delta: string | undefined =
           json?.choices?.[0]?.delta?.content ??
           json?.choices?.[0]?.message?.content;
@@ -147,6 +150,8 @@ function streamAnthropic(opts: ChatCompletionOptions, handlers: StreamHandlers):
     (raw) => parseSseLines(raw, (data) => {
       try {
         const json = JSON.parse(data);
+        const model = typeof json?.model === 'string' ? json.model : undefined;
+        if (model) handlers.onMeta?.({ model });
         if (json?.type === 'content_block_delta' && typeof json?.delta?.text === 'string') {
           handlers.onDelta(json.delta.text);
         }
@@ -196,6 +201,10 @@ function streamGemini(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
     (raw) => parseSseLines(raw, (data) => {
       try {
         const json = JSON.parse(data);
+        const model = typeof json?.modelVersion === 'string'
+          ? json.modelVersion
+          : (typeof json?.model === 'string' ? json.model : undefined);
+        if (model) handlers.onMeta?.({ model });
         const parts = json?.candidates?.[0]?.content?.parts;
         if (Array.isArray(parts)) {
           for (const p of parts) {
@@ -241,6 +250,8 @@ function streamOllama(opts: ChatCompletionOptions, handlers: StreamHandlers): ()
         if (!t) continue;
         try {
           const json = JSON.parse(t);
+          const model = typeof json?.model === 'string' ? json.model : undefined;
+          if (model) handlers.onMeta?.({ model });
           const delta: string | undefined = json?.message?.content;
           if (typeof delta === 'string' && delta.length > 0) handlers.onDelta(delta);
         } catch { /* ignore */ }

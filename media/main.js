@@ -12,7 +12,6 @@
   const attachmentsEl = /** @type {HTMLElement | null} */ (document.getElementById('attachments'));
   const statusbarEl = /** @type {HTMLElement} */ (document.getElementById('statusbar'));
   const statusModelEl = /** @type {HTMLElement} */ (document.getElementById('statusModel'));
-  const statusBaseUrlEl = /** @type {HTMLElement | null} */ (document.getElementById('statusBaseUrl'));
   const statusInfoEl = /** @type {HTMLElement} */ (document.getElementById('statusInfo'));
 
   /** @type {HTMLElement | null} */ let activeAssistantEl = null;
@@ -25,27 +24,12 @@
   /** @type {Array<{kind:'image'|'text', name:string, mime?:string, data:string}>} */
   let pendingAttachments = [];
 
-  function shortBaseUrl(url) {
-    if (!url) return '';
-    try {
-      const u = new URL(url);
-      return `${u.host}${u.pathname === '/' ? '' : u.pathname}`;
-    } catch {
-      return url;
-    }
-  }
-
   function applyRuntimeStatus(status) {
     if (!status || typeof status !== 'object') return;
     const model = String(status.model || '').trim();
-    const baseUrl = String(status.baseUrl || '').trim();
     if (statusModelEl && model) {
       statusModelEl.textContent = model;
       statusModelEl.title = `Current model: ${model}`;
-    }
-    if (statusBaseUrlEl && baseUrl) {
-      statusBaseUrlEl.textContent = shortBaseUrl(baseUrl);
-      statusBaseUrlEl.title = `Current base URL: ${baseUrl}`;
     }
     if (model) {
       inputEl.placeholder = `Message ${model}`;
@@ -395,12 +379,11 @@
       ? `<img class="hero-logo hero-logo-img" src="${logo}" alt="Yamakawa Code" />`
       : '<div class="hero-star" aria-hidden="true">✻</div>';
     const model = statusModelEl ? statusModelEl.textContent || '' : '';
-    const baseUrl = statusBaseUrlEl ? statusBaseUrlEl.title.replace('Current base URL: ', '') : '';
     hero.innerHTML =
       `<div class="hero-banner">${logoHtml}` +
       `<div class="hero-text">` +
       `<div class="hero-title">Welcome to <span class="brand">Yamakawa Code</span></div>` +
-      `<div class="hero-sub">/help for help, /clear to reset · ${escapeHtml(model)}${baseUrl ? ` · ${escapeHtml(baseUrl)}` : ''}</div>` +
+      `<div class="hero-sub">/help for help, /clear to reset · ${escapeHtml(model)}</div>` +
       `</div></div>` +
       `<ul class="tips">` +
       `<li><span class="tip-key">Enter</span><span>send message</span></li>` +
