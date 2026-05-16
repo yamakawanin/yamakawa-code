@@ -29,6 +29,9 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('yamakawaCode.clearChat', () => {
       provider.clearChat();
     }),
+    vscode.commands.registerCommand('yamakawaCode.openSettings', () => {
+      void vscode.commands.executeCommand('workbench.action.openSettings', 'yamakawaCode');
+    }),
     vscode.commands.registerCommand('yamakawaCode.focusInput', () => {
       provider.focusInput();
     })

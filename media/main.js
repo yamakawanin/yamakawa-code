@@ -6,12 +6,8 @@
   const formEl = /** @type {HTMLFormElement} */ (document.getElementById('composer'));
   const inputEl = /** @type {HTMLTextAreaElement} */ (document.getElementById('input'));
   const sendBtn = /** @type {HTMLButtonElement} */ (document.getElementById('sendBtn'));
-  const settingsBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('settingsBtn'));
   const attachBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('attachBtn'));
   const attachmentsEl = /** @type {HTMLElement | null} */ (document.getElementById('attachments'));
-  const statusbarEl = /** @type {HTMLElement} */ (document.getElementById('statusbar'));
-  const statusModelEl = /** @type {HTMLElement} */ (document.getElementById('statusModel'));
-  const statusInfoEl = /** @type {HTMLElement} */ (document.getElementById('statusInfo'));
   const sendIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
   const stopIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
 
@@ -21,27 +17,19 @@
   let pendingChunks = '';
   let typingTimer = 0;
   let isStreaming = false;
+  let currentModel = '';
 
   /** @type {Array<{kind:'image'|'text', name:string, mime?:string, data:string}>} */
   let pendingAttachments = [];
 
+  function hasPendingInput() {
+    return Boolean(inputEl.value.trim()) || pendingAttachments.length > 0;
+  }
+
   function applyRuntimeStatus(status) {
     if (!status || typeof status !== 'object') return;
     const model = String(status.model || '').trim();
-    const baseUrl = String(status.baseUrl || '').trim();
-    if (statusModelEl && model) {
-      statusModelEl.textContent = model;
-      statusModelEl.title = `Current model: ${model}`;
-    }
-    if (settingsBtn) {
-      settingsBtn.title = baseUrl
-        ? `Open settings (effective baseUrl: ${baseUrl})`
-        : 'Open settings';
-      settingsBtn.setAttribute('aria-label', settingsBtn.title);
-    }
-    if (model) {
-      inputEl.placeholder = `Message ${model}`;
-    }
+    currentModel = model;
   }
 
   function renderAttachmentChips() {
@@ -49,6 +37,7 @@
     if (pendingAttachments.length === 0) {
       attachmentsEl.innerHTML = '';
       attachmentsEl.hidden = true;
+      updatePrimaryButton();
       return;
     }
     attachmentsEl.hidden = false;
@@ -84,6 +73,7 @@
       chip.appendChild(close);
       attachmentsEl.appendChild(chip);
     });
+    updatePrimaryButton();
   }
 
   function renderAttachmentPreview(list) {
@@ -314,6 +304,21 @@
     return { wrap, body };
   }
 
+  function setMessageMeta(wrap, text) {
+    if (!wrap) return;
+    let meta = wrap.querySelector('.msg-meta');
+    if (!text) {
+      if (meta && meta.parentNode) meta.parentNode.removeChild(meta);
+      return;
+    }
+    if (!meta) {
+      meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      wrap.appendChild(meta);
+    }
+    meta.textContent = text;
+  }
+
   function startAssistantMessage() {
     const { wrap, body } = appendMessage('assistant', '<span class="cursor"></span>');
     activeAssistantEl = wrap;
@@ -336,6 +341,10 @@
       pendingChunks = '';
       renderActiveAssistant(false);
     }
+    if (activeAssistantEl) {
+      const meta = [currentModel, 'done'].filter(Boolean).join(' · ');
+      setMessageMeta(activeAssistantEl, meta);
+    }
     activeAssistantEl = null;
     activeAssistantBody = null;
     activeAssistantText = '';
@@ -347,6 +356,7 @@
     if (!sendBtn) return;
     if (isStreaming) {
       sendBtn.classList.add('stop-btn');
+      sendBtn.disabled = false;
       sendBtn.title = 'Stop';
       sendBtn.setAttribute('aria-label', 'Stop generation');
       sendBtn.innerHTML = stopIcon;
@@ -354,6 +364,7 @@
     }
 
     sendBtn.classList.remove('stop-btn');
+    sendBtn.disabled = !hasPendingInput();
     sendBtn.title = 'Send';
     sendBtn.setAttribute('aria-label', 'Send message');
     sendBtn.innerHTML = sendIcon;
@@ -362,8 +373,6 @@
   function setStreaming(streaming) {
     isStreaming = streaming;
     updatePrimaryButton();
-    if (statusbarEl) statusbarEl.classList.toggle('busy', streaming);
-    if (statusInfoEl) statusInfoEl.textContent = streaming ? 'generating…' : 'ready';
     inputEl.disabled = false;
   }
 
@@ -384,6 +393,7 @@
   function autoresize() {
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
+    updatePrimaryButton();
   }
   inputEl.addEventListener('input', autoresize);
   inputEl.addEventListener('keydown', (e) => {
@@ -400,9 +410,6 @@
     }
     submit();
   });
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
-  }
   if (attachBtn) {
     attachBtn.addEventListener('click', () => vscode.postMessage({ type: 'pickAttachment' }));
   }
@@ -541,12 +548,11 @@
     const logoHtml = logo
       ? `<img class="hero-logo hero-logo-img" src="${logo}" alt="Yamakawa Code" />`
       : '<div class="hero-star" aria-hidden="true">✻</div>';
-    const model = statusModelEl ? statusModelEl.textContent || '' : '';
     hero.innerHTML =
       `<div class="hero-banner">${logoHtml}` +
       `<div class="hero-text">` +
       `<div class="hero-title">Welcome to <span class="brand">Yamakawa Code</span></div>` +
-      `<div class="hero-sub">/help for help, /clear to reset · ${escapeHtml(model)}</div>` +
+      `<div class="hero-sub">/help for help, /clear to reset</div>` +
       `</div></div>` +
       `<ul class="tips">` +
       `<li><span class="tip-key">Enter</span><span>send message</span></li>` +

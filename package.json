@@ -44,6 +44,11 @@
     },
     "commands": [
       {
+        "command": "yamakawaCode.openSettings",
+        "title": "Yamakawa Code: Open Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "yamakawaCode.clearChat",
         "title": "Yamakawa Code: Clear Chat History",
         "icon": "$(trash)"
@@ -56,9 +61,14 @@
     "menus": {
       "view/title": [
         {
+          "command": "yamakawaCode.openSettings",
+          "when": "view == yamakawaCode.chatView",
+          "group": "navigation@1"
+        },
+        {
           "command": "yamakawaCode.clearChat",
           "when": "view == yamakawaCode.chatView",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ]
     },
