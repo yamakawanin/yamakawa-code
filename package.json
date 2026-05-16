@@ -178,5 +178,8 @@
     "url": "https://github.com/yamakawanin/yamakawa-code.git"
   },
   "license": "MIT",
-  "icon": "media/icon.jpg"
+  "icon": "media/icon.jpg",
+  "dependencies": {
+    "markdown-it": "^14.1.1"
+  }
 }

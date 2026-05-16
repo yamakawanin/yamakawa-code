@@ -6,13 +6,14 @@
   const formEl = /** @type {HTMLFormElement} */ (document.getElementById('composer'));
   const inputEl = /** @type {HTMLTextAreaElement} */ (document.getElementById('input'));
   const sendBtn = /** @type {HTMLButtonElement} */ (document.getElementById('sendBtn'));
-  const stopBtn = /** @type {HTMLButtonElement} */ (document.getElementById('stopBtn'));
   const settingsBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('settingsBtn'));
   const attachBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('attachBtn'));
   const attachmentsEl = /** @type {HTMLElement | null} */ (document.getElementById('attachments'));
   const statusbarEl = /** @type {HTMLElement} */ (document.getElementById('statusbar'));
   const statusModelEl = /** @type {HTMLElement} */ (document.getElementById('statusModel'));
   const statusInfoEl = /** @type {HTMLElement} */ (document.getElementById('statusInfo'));
+  const sendIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
+  const stopIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
 
   /** @type {HTMLElement | null} */ let activeAssistantEl = null;
   /** @type {HTMLElement | null} */ let activeAssistantBody = null;
@@ -97,6 +98,32 @@
     return `<div class="msg-attachments">${items}</div>`;
   }
 
+  function createMarkdownRenderer() {
+    const factory = typeof window !== 'undefined' ? window.markdownit : undefined;
+    if (typeof factory !== 'function') return null;
+
+    const renderer = factory({
+      html: false,
+      breaks: true,
+      linkify: true,
+      typographer: true
+    });
+
+    const fallbackLinkOpen = renderer.renderer.rules.link_open
+      || ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+
+    renderer.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+      const token = tokens[idx];
+      token.attrSet('target', '_blank');
+      token.attrSet('rel', 'noopener noreferrer');
+      return fallbackLinkOpen(tokens, idx, options, env, self);
+    };
+
+    return renderer;
+  }
+
+  const markdownRenderer = createMarkdownRenderer();
+
   // -------- Markdown (safe, improved) --------
   function escapeHtml(s) {
     return s
@@ -121,9 +148,9 @@
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, text, url) => {
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
     });
-    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/(^|[^*])\*([^*\n]+)\*(?=[^*]|$)/g, '$1<em>$2</em>');
-    s = s.replace(/(^|[^_])_([^_\n]+)_(?=[^_]|$)/g, '$1<em>$2</em>');
+    s = s.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?=[^*]|$)/g, '$1<em>$2</em>');
+    s = s.replace(/(^|[^a-zA-Z0-9])_([^_\n]+?)_(?=[^a-zA-Z0-9]|$)/g, '$1<em>$2</em>');
     s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
 
     s = s.replace(/\u0000INL(\d+)\u0000/g, (_, i) => codeSpans[Number(i)] || '');
@@ -150,6 +177,10 @@
 
   function renderMarkdown(src) {
     if (!src) return '';
+    if (markdownRenderer) {
+      return markdownRenderer.render(src);
+    }
+
     const lines = src.replace(/\r\n?/g, '\n').split('\n');
     const out = [];
     let i = 0;
@@ -312,10 +343,25 @@
     setStreaming(false);
   }
 
+  function updatePrimaryButton() {
+    if (!sendBtn) return;
+    if (isStreaming) {
+      sendBtn.classList.add('stop-btn');
+      sendBtn.title = 'Stop';
+      sendBtn.setAttribute('aria-label', 'Stop generation');
+      sendBtn.innerHTML = stopIcon;
+      return;
+    }
+
+    sendBtn.classList.remove('stop-btn');
+    sendBtn.title = 'Send';
+    sendBtn.setAttribute('aria-label', 'Send message');
+    sendBtn.innerHTML = sendIcon;
+  }
+
   function setStreaming(streaming) {
     isStreaming = streaming;
-    if (sendBtn) sendBtn.hidden = streaming;
-    if (stopBtn) stopBtn.hidden = !streaming;
+    updatePrimaryButton();
     if (statusbarEl) statusbarEl.classList.toggle('busy', streaming);
     if (statusInfoEl) statusInfoEl.textContent = streaming ? 'generating…' : 'ready';
     inputEl.disabled = false;
@@ -347,7 +393,13 @@
     }
   });
   formEl.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
-  stopBtn.addEventListener('click', () => { vscode.postMessage({ type: 'abort' }); });
+  sendBtn.addEventListener('click', () => {
+    if (isStreaming) {
+      vscode.postMessage({ type: 'abort' });
+      return;
+    }
+    submit();
+  });
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
   }
@@ -455,7 +507,7 @@
         break;
       case 'toolResult':
         if (Array.isArray(msg.summary)) {
-          const lines = msg.summary.map((s) => `> ${s.ok ? '\u2713' : '\u2717'} **${s.name}** — ${escapeHtml(s.snippet || '')}`).join('\n');
+          const lines = msg.summary.map((s) => `> ${s.ok ? '\u2713' : '\u2717'} **${s.name}** \u2014 ${s.snippet || ''}`).join('\n');
           if (lines) appendMessage('assistant', renderMarkdown(lines));
         }
         break;
@@ -506,6 +558,7 @@
   }
 
   vscode.postMessage({ type: 'ready' });
+  updatePrimaryButton();
   autoresize();
   inputEl.focus();
 })();

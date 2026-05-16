@@ -34,7 +34,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'media')
+        this.context.extensionUri
       ]
     };
 
@@ -324,6 +324,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const nonce = getNonce();
     const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'main.css'));
+    const markdownItUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', 'markdown-it', 'dist', 'markdown-it.min.js'));
     const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'main.js'));
     const logoUri = this.resolveLogoUri(webview);
 
@@ -398,10 +399,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             <button type="button" id="settingsBtn" class="icon-btn" title="Open settings" aria-label="Open settings">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </button>
-            <button type="button" id="stopBtn" class="send-btn stop-btn" title="Stop" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
-            </button>
-            <button type="submit" id="sendBtn" class="send-btn" title="Send">
+            <button type="button" id="sendBtn" class="send-btn" title="Send" aria-label="Send message">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
             </button>
           </div>
@@ -409,6 +407,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       </div>
     </form>
   </div>
+  <script nonce="${nonce}" src="${markdownItUri}"></script>
   <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;
